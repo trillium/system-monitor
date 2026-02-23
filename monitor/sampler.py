@@ -13,22 +13,13 @@ def sample():
     """Take one sample and write to stats.json + history.jsonl."""
     now = datetime.now(timezone.utc)
     per_core, avg_cpu = get_per_core_cpu()
-
-    # Aggregate CPU (backward compatible)
-    # Use avg as approximation for user+sys split
-    cpu_user = round(avg_cpu * 0.6, 1)  # rough split
-    cpu_sys = round(avg_cpu * 0.4, 1)
-    cpu_idle = round(100 - avg_cpu, 1)
-
     memory = get_memory()
 
     data = {
         "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "epoch": int(now.timestamp()),
         "cpu": {
-            "user": cpu_user,
-            "system": cpu_sys,
-            "idle": cpu_idle,
+            "average": avg_cpu,
             "cores": NUM_CPUS,
             "per_core": per_core,
         },
