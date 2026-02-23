@@ -13,6 +13,36 @@ CPU_STATE_IDLE = 2
 CPU_STATE_NICE = 3
 CPU_STATE_MAX = 4
 
+# Mach types
+mach_port_t = ctypes.c_uint
+kern_return_t = ctypes.c_int
+vm_address_t = ctypes.c_ulong
+vm_size_t = ctypes.c_ulong
+mach_msg_type_number_t = ctypes.c_uint
+
+# Configure function signatures
+libc.mach_host_self.restype = mach_port_t
+libc.mach_host_self.argtypes = []
+
+libc.mach_task_self.restype = mach_port_t
+libc.mach_task_self.argtypes = []
+
+libc.host_processor_info.restype = kern_return_t
+libc.host_processor_info.argtypes = [
+    mach_port_t,                                # host
+    ctypes.c_int,                               # flavor
+    ctypes.POINTER(ctypes.c_int),               # out_processor_count
+    ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),  # out_processor_info
+    ctypes.POINTER(mach_msg_type_number_t),     # out_processor_info_count
+]
+
+libc.vm_deallocate.restype = kern_return_t
+libc.vm_deallocate.argtypes = [
+    mach_port_t,    # target_task
+    vm_address_t,   # address
+    vm_size_t,      # size
+]
+
 NUM_CPUS = int(subprocess.check_output(["sysctl", "-n", "hw.ncpu"]).strip())
 
 _prev_ticks = None
@@ -25,7 +55,7 @@ def get_per_core_cpu():
     mach_host = libc.mach_host_self()
     processor_count = ctypes.c_int()
     info_array = ctypes.POINTER(ctypes.c_int)()
-    info_count = ctypes.c_int()
+    info_count = mach_msg_type_number_t()
 
     libc.host_processor_info(
         mach_host,
@@ -45,6 +75,11 @@ def get_per_core_cpu():
             "idle": info_array[offset + CPU_STATE_IDLE],
             "nice": info_array[offset + CPU_STATE_NICE],
         })
+
+    # Free kernel-allocated memory (leaked ~4KB/call without this)
+    array_addr = ctypes.cast(info_array, ctypes.c_void_p).value
+    array_size = info_count.value * ctypes.sizeof(ctypes.c_int)
+    libc.vm_deallocate(libc.mach_task_self(), array_addr, array_size)
 
     per_core = []
     if _prev_ticks and len(_prev_ticks) == ncpu:
