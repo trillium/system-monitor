@@ -1,0 +1,13 @@
+[Unit]
+Description=System monitor (writes stats.json for the Talon mode indicator)
+
+[Service]
+Type=simple
+# install.sh replaces @REPO_DIR@ with the checkout path when installing.
+ExecStart=/usr/bin/env python3 @REPO_DIR@/bin/monitor.py
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -2,12 +2,17 @@
 
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime, timezone
 
 from .config import STATS_FILE, HISTORY_FILE, MAX_HISTORY_SIZE, DATA_DIR
-from .cpu import get_per_core_cpu, NUM_CPUS
-from .memory import get_memory
+
+if sys.platform.startswith("linux"):
+    from .linux import get_per_core_cpu, get_memory, NUM_CPUS
+else:
+    from .cpu import get_per_core_cpu, NUM_CPUS
+    from .memory import get_memory
 
 
 def _atomic_write(target, content):
@@ -33,22 +38,26 @@ def _atomic_write(target, content):
                 pass
 
 
+def build_record(now, per_core, avg_cpu, num_cpus, memory):
+    """Assemble the stats.json / history.jsonl record."""
+    return {
+        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "epoch": int(now.timestamp()),
+        "cpu": {
+            "average": avg_cpu,
+            "cores": num_cpus,
+            "per_core": per_core,
+        },
+        "memory": memory,
+    }
+
+
 def sample():
     """Take one sample and write to stats.json + history.jsonl."""
     now = datetime.now(timezone.utc)
     per_core, avg_cpu = get_per_core_cpu()
     memory = get_memory()
-
-    data = {
-        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "epoch": int(now.timestamp()),
-        "cpu": {
-            "average": avg_cpu,
-            "cores": NUM_CPUS,
-            "per_core": per_core,
-        },
-        "memory": memory,
-    }
+    data = build_record(now, per_core, avg_cpu, NUM_CPUS, memory)
 
     _atomic_write(STATS_FILE, json.dumps(data))
 
